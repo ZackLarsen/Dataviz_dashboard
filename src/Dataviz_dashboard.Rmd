@@ -1,7 +1,7 @@
 ---
 title: "Data Visualization Dashboard"
-author: "Zack Larsen"
-date: "May 20, 2019"
+#author: "Zack Larsen"
+date: "May 26, 2019"
 output: 
   flexdashboard::flex_dashboard:
     social: [ "menu" ]
@@ -12,10 +12,22 @@ output:
     source: embed
 ---
 
+<!-- <style> -->
+
+<!-- body { -->
+<!--   padding-top:0px -->
+<!-- } -->
+
+<!-- .navbar{ -->
+<!--   visibility: hidden -->
+<!-- } -->
+
+<!-- </style> -->
+
 ```{r setup, include=FALSE}
 library(pacman)
 library(tidyverse)
-p_load(flexdashboard, leaflet, leaflet.extras, dplyr, ggvis, here, conflicted, data.table, jsonlite, kableExtra, glue, geosphere, DT, networkD3, htmltools, geojsonio, magrittr, treemap, highcharter, viridisLite, ggmap, scales, ggthemes)
+p_load(flexdashboard, leaflet, leaflet.extras, dplyr, ggvis, here, conflicted, data.table, jsonlite, kableExtra, glue, geosphere, DT, networkD3, htmltools, geojsonio, magrittr, treemap, highcharter, viridisLite, ggmap, scales, ggthemes, rbokeh)
 conflict_prefer("filter", "dplyr")
 
 here::here() # "/Users/zacklarsen/Zack_Master/Projects/Dataviz/R/Divvy_Flex"
@@ -119,12 +131,12 @@ crimes %>%
 ```
 
 
-Statistical {.storyboard}
+Statistical {.storyboard data-commentary-width=200 data-navmenu="Traditional"} 
 =========================================
 
 These visualization convey information about distributions and uncertainty.
 
-### Boxplots
+### Boxplots are used for examining the range of values that a continuous variable takes on.
 
 ```{r, cache=TRUE, eval=TRUE}
 
@@ -138,33 +150,66 @@ ggplot(diamonds, aes(x=diamonds$cut, y=diamonds$price, fill=diamonds$color)) +
   theme_fivethirtyeight() + 
   coord_flip()
 
+x1 <- ggplot(data = diamonds,
+             mapping = aes(x = cut, y = price)) +
+  theme_economist() + 
+  scale_fill_economist()
+
+x1 + geom_boxplot(fill = "lightpink") + 
+  coord_flip()
+
 ```
+
+***
+
+Here we have two groupings: the "cut" of the diamond on the y-axis and the "color", which is mapped to the "fill" attribute.
 
 
 ### Scatter Plots
 
 ```{r, cache=TRUE, eval=TRUE}
 
+p <- ggplot(data = diamonds,
+            mapping = aes(x = depth, y = price))
 
+p + geom_point() +
+  annotate(geom = "rect", xmin = 70, xmax = 80,
+           ymin = 15000, ymax = 20000, fill = "red", alpha = 0.2) + 
+  annotate(geom = "text", x = 70, y = 14000,
+           label = "A surprisingly high \n recovery rate.", hjust = 0)
 
 ```
-
-
-### Density Plots
 
 ```{r, cache=TRUE, eval=TRUE}
 
-```
-
-
-### Density Plots
-
-```{r, cache=TRUE, eval=TRUE}
+figure() %>%
+  ly_points(Sepal.Length, Sepal.Width, data = iris, color = Species, hover = list(Sepal.Length, Sepal.Width))
 
 ```
 
 
-Categorical {.storyboard}
+### Density plots are helpful in showing where the largest mass of the distribution of a continuous variable lies. They give more context than a traditional 5-figure boxplot.
+
+```{r geom_density, cache=TRUE, eval=TRUE}
+
+# Proportionally scaled density map
+d2 <- ggplot(data = diamonds,
+             mapping = aes(x = price, fill = cut, color = cut))
+
+d2 + geom_density(alpha = 0.3, mapping = aes(y = ..scaled..))
+
+```
+
+```{r ly_density, cache=TRUE, eval=TRUE}
+
+figure(width = 600, height = 400, legend_location = "top_right") %>%
+  ly_hist(price, data = diamonds, breaks = 40, freq = FALSE, hover = (diamonds$price)) %>%
+  ly_density(price, data = diamonds, color = "red")
+
+```
+
+
+Categorical {.storyboard data-navmenu="Traditional"} 
 =========================================
 
 These visualizations correspond to count data obtained by aggregating by certain levels or factors and count the number of observations for each category or subcategory.
@@ -227,6 +272,70 @@ Geospatial {.storyboard}
 =========================================
 
 This board is for displaying information about coordinate points or geospatial features such as countries, states, counties, rivers, elevation, etc.
+
+
+### Heatmap
+
+```{r, cache=TRUE, eval=TRUE}
+
+leaflet(crimes) %>%
+  addTiles() %>% 
+  addHeatmap(lng=~Longitude,
+             lat=~Latitude,
+             radius = 8)
+
+```
+
+
+### Crime Totals By Ward
+
+```{r, cache=TRUE, eval=TRUE}
+
+ward_totals <- crimes %>% 
+  select(Ward, `Primary Type`) %>% 
+  group_by(Ward) %>% 
+  summarise(n()) %<>% 
+  mutate(count = `n()`)
+
+ward_totals <- setNames(ward_totals$count, as.character(ward_totals$Ward))
+
+ward_boundaries$crime_total <- ward_totals
+
+labels <- sprintf(
+  "<strong>Ward #%s</strong><br/> %g crimes committed in this ward",
+  ward_boundaries$ward, ward_boundaries$crime_total
+) %>% lapply(htmltools::HTML)
+
+
+qpal <- colorQuantile("Reds", ward_boundaries$crime_total, n = 10)
+
+leaflet(ward_boundaries) %>%
+  addTiles() %>%
+  addPolygons(fillColor = ~qpal(crime_total),
+              weight = 2,
+              opacity = 1,
+              color = "white",
+              dashArray = "3",
+              fillOpacity = 0.9,
+              highlight = highlightOptions(
+                weight = 3, # This is the width of the dashed line
+                color = "#666",
+                dashArray = "",
+                fillOpacity = 0.7,
+                bringToFront = TRUE),
+              label = ~labels,
+              labelOptions = labelOptions(
+                style = list("font-weight" = "normal", padding = "3px 8px"),
+                textsize = "15px",
+                direction = "auto")) %>% 
+  addLegend(pal = qpal, 
+            values = ~crime_total,
+            opacity = 0.7, 
+            title = "Crime Count Quantile",
+            position = "topright")
+
+```
+
 
 ### Clusters
 
@@ -329,73 +438,6 @@ icons <- awesomeIcons(
 leaflet(crimes) %>%
   addTiles() %>%
   addAwesomeMarkers(~Longitude, ~Latitude, icon=icons, label=~as.character(`Primary Type`))
-
-```
-
-
-### Heatmap
-
-```{r, cache=TRUE, eval=TRUE}
-
-leaflet(crimes) %>%
-  addTiles() %>% 
-  addHeatmap(lng=~Longitude,
-             lat=~Latitude,
-             radius = 8)
-
-```
-
-
-Ward Features {.storyboard}
-=========================================
-
-
-### Crime Totals By Ward
-
-```{r, cache=TRUE, eval=TRUE}
-
-ward_totals <- crimes %>% 
-  select(Ward, `Primary Type`) %>% 
-  group_by(Ward) %>% 
-  summarise(n()) %<>% 
-  mutate(count = `n()`)
-
-ward_totals <- setNames(ward_totals$count, as.character(ward_totals$Ward))
-
-ward_boundaries$crime_total <- ward_totals
-
-labels <- sprintf(
-  "<strong>Ward #%s</strong><br/> %g crimes committed in this ward",
-  ward_boundaries$ward, ward_boundaries$crime_total
-) %>% lapply(htmltools::HTML)
-
-
-qpal <- colorQuantile("Reds", ward_boundaries$crime_total, n = 10)
-
-leaflet(ward_boundaries) %>%
-  addTiles() %>%
-  addPolygons(fillColor = ~qpal(crime_total),
-              weight = 2,
-              opacity = 1,
-              color = "white",
-              dashArray = "3",
-              fillOpacity = 0.9,
-              highlight = highlightOptions(
-                weight = 3, # This is the width of the dashed line
-                color = "#666",
-                dashArray = "",
-                fillOpacity = 0.7,
-                bringToFront = TRUE),
-              label = ~labels,
-              labelOptions = labelOptions(
-                style = list("font-weight" = "normal", padding = "3px 8px"),
-                textsize = "15px",
-                direction = "auto")) %>% 
-  addLegend(pal = qpal, 
-            values = ~crime_total,
-            opacity = 0.7, 
-            title = "Crime Count Quantile",
-            position = "topright")
 
 ```
 
