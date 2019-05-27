@@ -27,7 +27,15 @@ output:
 ```{r setup, include=FALSE}
 library(pacman)
 library(tidyverse)
-p_load(flexdashboard, leaflet, leaflet.extras, dplyr, ggvis, here, conflicted, data.table, jsonlite, kableExtra, glue, geosphere, DT, networkD3, htmltools, geojsonio, magrittr, treemap, highcharter, viridisLite, ggmap, scales, ggthemes, rbokeh)
+
+#devtools::install_github("jeromefroe/circlepackeR")
+#devtools::install_github("thomasp85/patchwork")
+
+#https://github.com/hrbrmstr/hrbrthemes
+#devtools::install_github("hrbrmstr/hrbrthemes")
+
+p_load(flexdashboard, leaflet, leaflet.extras, dplyr, ggvis, here, conflicted, data.table, jsonlite, kableExtra, glue, geosphere, DT, networkD3, htmltools, geojsonio, magrittr, treemap, highcharter, viridisLite, ggmap, scales, ggthemes, rbokeh, data.tree, ggraph, circlepackeR, viridis, patchwork, hrbrthemes, ggraph, igraph, RColorBrewer, collapsibleTree)
+
 conflict_prefer("filter", "dplyr")
 
 here::here() # "/Users/zacklarsen/Zack_Master/Projects/Dataviz/R/Divvy_Flex"
@@ -216,7 +224,7 @@ These visualizations correspond to count data obtained by aggregating by certain
 
 ### Treemap
 
-```{r, cache=TRUE, eval=TRUE}
+```{r Treemap, cache=TRUE, eval=TRUE}
 
 thm <- 
   hc_theme(
@@ -249,7 +257,30 @@ highchart() %>%
 
 ### Packed Bubble Charts
 
-```{r, cache=TRUE, eval=TRUE}
+```{r Bubble, cache=TRUE, eval=TRUE, warning=FALSE}
+
+# https://www.r-graph-gallery.com/338-interactive-circle-packing-with-circlepacker/
+
+# Let's use the 'flare dataset' (stored in the ggraph library)
+data_edge=flare$edges
+data_edge$from=gsub(".*\\.","",data_edge$from)
+data_edge$to=gsub(".*\\.","",data_edge$to)
+#head(data_edge)   # This is an edge list
+ 
+# We need to convert it to a nested data frame. the data.tree library is our best friend for that:
+data_tree <- FromDataFrameNetwork(data_edge)
+data_nested=ToDataFrameTree(data_tree, 
+                            level1 = function(x) x$path[2],
+                            level2 = function(x) x$path[3],
+                            level3 = function(x) x$path[4],
+                            level4 = function(x) x$path[5])[-1,-1]
+data_nested=na.omit(data_nested)
+ 
+# Now we can plot it as seen before!
+data_nested$pathString <- paste("roots", data_nested$level1, data_nested$level2, data_nested$level3, data_nested$level4, sep = "/")
+data_nested$value=1
+data_Node <- as.Node(data_nested)
+circlepackeR(data_Node, size = "value")
 
 ```
 
@@ -570,5 +601,152 @@ This board is for visualizations that might not appear frequently in many exampl
 ### Dumbbell (Love) plot
 
 ```{r, cache=TRUE, eval=TRUE}
+
+```
+
+
+### Hierarchical Edge Bundling
+
+```{r}
+
+# https://www.data-to-viz.com/graph/edge_bundling.html
+
+# The flare dataset is provided in ggraph
+edges <- flare$edges
+vertices <- flare$vertices %>% arrange(name) %>% mutate(name=factor(name, name))
+connections <- flare$imports
+
+# Preparation to draw labels properly:
+vertices$id=NA
+myleaves=which(is.na( match(vertices$name, edges$from) ))
+nleaves=length(myleaves)
+vertices$id[ myleaves ] = seq(1:nleaves)
+vertices$angle= 90 - 360 * vertices$id / nleaves
+vertices$hjust<-ifelse( vertices$angle < -90, 1, 0)
+vertices$angle<-ifelse(vertices$angle < -90, vertices$angle+180, vertices$angle)
+
+# Build a network object from this dataset:
+mygraph <- graph_from_data_frame(edges, vertices = vertices)
+
+# The connection object must refer to the ids of the leaves:
+from = match( connections$from, vertices$name)
+to = match( connections$to, vertices$name)
+
+# Make the plot
+ggraph(mygraph, layout = 'dendrogram', circular = TRUE) + 
+    geom_conn_bundle(data = get_con(from = from, to = to), alpha = 0.1, colour="#69b3a2") + 
+    geom_node_text(aes(x = x*1.01, y=y*1.01, filter = leaf, label=shortName, angle = angle, hjust=hjust), size=1.5, alpha=1) +
+    coord_fixed() +
+    theme_void() +
+    theme(
+      legend.position="none",
+      plot.margin=unit(c(0,0,0,0),"cm"),
+    ) +
+    expand_limits(x = c(-1.2, 1.2), y = c(-1.2, 1.2))
+
+```
+
+
+### HEB 2
+
+```{r, cache=TRUE, eval=TRUE, warning=FALSE}
+
+# https://www.r-graph-gallery.com/311-add-labels-to-hierarchical-edge-bundling/
+
+# create a data frame giving the hierarchical structure of your individuals
+d1=data.frame(from="origin", to=paste("group", seq(1,10), sep=""))
+d2=data.frame(from=rep(d1$to, each=10), to=paste("subgroup", seq(1,100), sep="_"))
+edges=rbind(d1, d2)
+
+# create a dataframe with connection between leaves (individuals)
+all_leaves=paste("subgroup", seq(1,100), sep="_")
+connect=rbind( data.frame( from=sample(all_leaves, 100, replace=T) , to=sample(all_leaves, 100, replace=T)), data.frame( from=sample(head(all_leaves), 30, replace=T) , to=sample( tail(all_leaves), 30, replace=T)), data.frame( from=sample(all_leaves[25:30], 30, replace=T) , to=sample( all_leaves[55:60], 30, replace=T)), data.frame( from=sample(all_leaves[75:80], 30, replace=T) , to=sample( all_leaves[55:60], 30, replace=T)) )
+connect$value=runif(nrow(connect))
+
+# create a vertices data.frame. One line per object of our hierarchy
+vertices = data.frame(
+  name = unique(c(as.character(edges$from), as.character(edges$to))) , 
+  value = runif(111)
+) 
+# Let's add a column with the group of each name. It will be useful later to color points
+vertices$group = edges$from[ match( vertices$name, edges$to ) ]
+
+#Let's add information concerning the label we are going to add: angle, horizontal adjustement and potential flip
+#calculate the ANGLE of the labels
+vertices$id=NA
+myleaves=which(is.na( match(vertices$name, edges$from) ))
+nleaves=length(myleaves)
+vertices$id[ myleaves ] = seq(1:nleaves)
+vertices$angle= 90 - 360 * vertices$id / nleaves
+
+# calculate the alignment of labels: right or left
+# If I am on the left part of the plot, my labels have currently an angle < -90
+vertices$hjust<-ifelse( vertices$angle < -90, 1, 0)
+
+# flip angle BY to make them readable
+vertices$angle<-ifelse(vertices$angle < -90, vertices$angle+180, vertices$angle)
+
+
+# Create a graph object
+mygraph <- graph_from_data_frame( edges, vertices=vertices )
+
+# The connection object must refer to the ids of the leaves:
+from = match( connect$from, vertices$name)
+to = match( connect$to, vertices$name)
+
+
+
+ggraph(mygraph, layout = 'dendrogram', circular = TRUE) + 
+  geom_conn_bundle(data = get_con(from = from, to = to), alpha=0.2, width=0.9, aes(colour=..index..)) +
+  scale_edge_colour_distiller(palette = "RdPu") +
+  
+  geom_node_text(aes(x = x*1.15, y=y*1.15, filter = leaf, label=name, angle = angle, hjust=hjust, colour=group), size=2, alpha=1) +
+  
+  geom_node_point(aes(filter = leaf, x = x*1.07, y=y*1.07, colour=group, size=value, alpha=0.2)) +
+  scale_colour_manual(values= rep( brewer.pal(9,"Paired") , 30)) +
+  scale_size_continuous( range = c(0.1,10) ) +
+  
+  theme_void() +
+  theme(
+    legend.position="none",
+    plot.margin=unit(c(0,0,0,0),"cm"),
+  ) +
+  expand_limits(x = c(-1.3, 1.3), y = c(-1.3, 1.3))
+
+```
+
+
+
+### Collapsible Tree Diagram
+```{r}
+
+# https://adeelk93.github.io/collapsibleTree/
+
+org <- data.frame(
+    Manager = c(
+        NA, "Ana", "Ana", "Bill", "Bill", "Bill", "Claudette", "Claudette", "Danny",
+        "Fred", "Fred", "Grace", "Larry", "Larry", "Nicholas", "Nicholas"
+    ),
+    Employee = c(
+        "Ana", "Bill", "Larry", "Claudette", "Danny", "Erika", "Fred", "Grace",
+        "Henri", "Ida", "Joaquin", "Kate", "Mindy", "Nicholas", "Odette", "Peter"
+    ),
+    Title = c(
+        "President", "VP Operations", "VP Finance", "Director", "Director", "Scientist",
+        "Manager", "Manager", "Jr Scientist", "Operator", "Operator", "Associate",
+        "Analyst", "Director", "Accountant", "Accountant"
+    )
+)
+
+org$Color <- org$Title
+levels(org$Color) <- colorspace::rainbow_hcl(11)
+collapsibleTreeNetwork(
+  org,
+  attribute = "Title",
+  fill = "Color",
+  nodeSize = "leafCount",
+  collapsed = FALSE
+)
+
 
 ```
