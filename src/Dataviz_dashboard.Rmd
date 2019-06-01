@@ -4,6 +4,7 @@ title: "Data Visualization Dashboard"
 date: "May 26, 2019"
 output: 
   flexdashboard::flex_dashboard:
+    theme: "journal"
     social: [ "menu" ]
     navbar:
       - { title: "About Me", href: "https://zacklarsen.github.io/" , align: right}
@@ -35,6 +36,8 @@ library(tidyverse)
 #devtools::install_github("hrbrmstr/hrbrthemes")
 
 p_load(flexdashboard, leaflet, leaflet.extras, dplyr, ggvis, here, conflicted, data.table, jsonlite, kableExtra, glue, geosphere, DT, networkD3, htmltools, geojsonio, magrittr, treemap, highcharter, viridisLite, ggmap, scales, ggthemes, rbokeh, data.tree, ggraph, circlepackeR, viridis, patchwork, hrbrthemes, ggraph, igraph, RColorBrewer, collapsibleTree)
+
+#plotly
 
 conflict_prefer("filter", "dplyr")
 
@@ -152,7 +155,7 @@ ggplot(diamonds, aes(x=diamonds$cut, y=diamonds$price, fill=diamonds$color)) +
   geom_boxplot() + 
   scale_y_continuous(labels = dollar) + 
   #guides(fill=FALSE) + 
-  ggtitle("Diamond price by cut type") + 
+  ggtitle("Diamond price by cut type and color") + 
   xlab("Type") + 
   ylab("Price") + 
   theme_fivethirtyeight() + 
@@ -164,13 +167,15 @@ x1 <- ggplot(data = diamonds,
   scale_fill_economist()
 
 x1 + geom_boxplot(fill = "lightpink") + 
-  coord_flip()
+  scale_y_continuous(label = dollar) +
+  coord_flip() + 
+  ggtitle("Diamond price by cut type")
 
 ```
 
-***
+<!-- *** -->
 
-Here we have two groupings: the "cut" of the diamond on the y-axis and the "color", which is mapped to the "fill" attribute.
+<!-- Here we have two groupings: the "cut" of the diamond on the y-axis and the "color", which is mapped to the "fill" attribute. -->
 
 
 ### Scatter Plots
@@ -198,7 +203,7 @@ figure() %>%
 
 ### Density plots are helpful in showing where the largest mass of the distribution of a continuous variable lies. They give more context than a traditional 5-figure boxplot.
 
-```{r geom_density, cache=TRUE, eval=TRUE}
+```{r, cache=TRUE, eval=TRUE}
 
 # Proportionally scaled density map
 d2 <- ggplot(data = diamonds,
@@ -208,7 +213,7 @@ d2 + geom_density(alpha = 0.3, mapping = aes(y = ..scaled..))
 
 ```
 
-```{r ly_density, cache=TRUE, eval=TRUE}
+```{r cache=TRUE, eval=TRUE}
 
 figure(width = 600, height = 400, legend_location = "top_right") %>%
   ly_hist(price, data = diamonds, breaks = 40, freq = FALSE, hover = (diamonds$price)) %>%
@@ -649,7 +654,7 @@ ggraph(mygraph, layout = 'dendrogram', circular = TRUE) +
 
 ### HEB 2
 
-```{r, cache=TRUE, eval=TRUE, warning=FALSE}
+```{r, cache=TRUE, eval=FALSE, warning=FALSE}
 
 # https://www.r-graph-gallery.com/311-add-labels-to-hierarchical-edge-bundling/
 
@@ -674,25 +679,25 @@ vertices$group = edges$from[ match( vertices$name, edges$to ) ]
 #Let's add information concerning the label we are going to add: angle, horizontal adjustement and potential flip
 #calculate the ANGLE of the labels
 vertices$id=NA
-myleaves=which(is.na( match(vertices$name, edges$from) ))
+myleaves=which(is.na(match(vertices$name, edges$from)))
 nleaves=length(myleaves)
 vertices$id[ myleaves ] = seq(1:nleaves)
-vertices$angle= 90 - 360 * vertices$id / nleaves
+vertices$angle = 90 - 360 * vertices$id / nleaves
 
 # calculate the alignment of labels: right or left
 # If I am on the left part of the plot, my labels have currently an angle < -90
-vertices$hjust<-ifelse( vertices$angle < -90, 1, 0)
+vertices$hjust<-ifelse(vertices$angle <- 90, 1, 0)
 
 # flip angle BY to make them readable
-vertices$angle<-ifelse(vertices$angle < -90, vertices$angle+180, vertices$angle)
+vertices$angle<-ifelse(vertices$angle <- 90, vertices$angle + 180, vertices$angle)
 
 
 # Create a graph object
-mygraph <- graph_from_data_frame( edges, vertices=vertices )
+mygraph <- graph_from_data_frame(edges, vertices=vertices)
 
 # The connection object must refer to the ids of the leaves:
-from = match( connect$from, vertices$name)
-to = match( connect$to, vertices$name)
+from = match(connect$from, vertices$name)
+to = match(connect$to, vertices$name)
 
 
 
@@ -718,7 +723,7 @@ ggraph(mygraph, layout = 'dendrogram', circular = TRUE) +
 
 
 ### Collapsible Tree Diagram
-```{r}
+```{r tree, cache=TRUE, eval=FALSE}
 
 # https://adeelk93.github.io/collapsibleTree/
 
