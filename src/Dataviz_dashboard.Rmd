@@ -28,6 +28,7 @@ output:
 ```{r setup, include=FALSE}
 library(pacman)
 library(tidyverse)
+#library(hrbrthemes)
 
 #devtools::install_github("jeromefroe/circlepackeR")
 #devtools::install_github("thomasp85/patchwork")
@@ -35,7 +36,7 @@ library(tidyverse)
 #https://github.com/hrbrmstr/hrbrthemes
 #devtools::install_github("hrbrmstr/hrbrthemes")
 
-p_load(flexdashboard, leaflet, leaflet.extras, dplyr, ggvis, here, conflicted, data.table, jsonlite, kableExtra, glue, geosphere, DT, networkD3, htmltools, geojsonio, magrittr, treemap, highcharter, viridisLite, ggmap, scales, ggthemes, rbokeh, data.tree, ggraph, circlepackeR, viridis, patchwork, hrbrthemes, ggraph, igraph, RColorBrewer, collapsibleTree)
+p_load(flexdashboard, leaflet, leaflet.extras, dplyr, ggvis, here, conflicted, data.table, jsonlite, kableExtra, glue, geosphere, DT, networkD3, htmltools, geojsonio, magrittr, treemap, highcharter, viridisLite, ggmap, scales, ggthemes, rbokeh, data.tree, ggraph, circlepackeR, viridis, patchwork, ggraph, igraph, RColorBrewer, collapsibleTree)
 
 #plotly
 
@@ -61,7 +62,7 @@ Landing Page - Crime Map
 Column 
 -------------------------------------
 
-### Crimes, plotted using leaflet. This map can be zoomed in on interactively and the station names will be displayed upon clicking the icon.
+### Chicago crimes, plotted using leaflet. This map can be zoomed in on interactively and the station names will be displayed upon hovering over the icon.
 
 ```{r, cache=TRUE}
 
@@ -265,7 +266,7 @@ highchart() %>%
 
 ### Packed Bubble Charts
 
-```{r Bubble, cache=TRUE, eval=TRUE, warning=FALSE}
+```{r Bubble, cache=TRUE, error=FALSE, warning=FALSE, eval=TRUE}
 
 # https://www.r-graph-gallery.com/338-interactive-circle-packing-with-circlepacker/
 
@@ -277,33 +278,60 @@ data_edge$to=gsub(".*\\.","",data_edge$to)
  
 # We need to convert it to a nested data frame. the data.tree library is our best friend for that:
 data_tree <- FromDataFrameNetwork(data_edge)
-data_nested=ToDataFrameTree(data_tree, 
+data_nested <- ToDataFrameTree(data_tree, 
                             level1 = function(x) x$path[2],
                             level2 = function(x) x$path[3],
                             level3 = function(x) x$path[4],
                             level4 = function(x) x$path[5])[-1,-1]
-data_nested=na.omit(data_nested)
+data_nested <- na.omit(data_nested)
  
 # Now we can plot it as seen before!
 data_nested$pathString <- paste("roots", data_nested$level1, data_nested$level2, data_nested$level3, data_nested$level4, sep = "/")
 data_nested$value=1
 data_Node <- as.Node(data_nested)
+
 circlepackeR(data_Node, size = "value")
 
 ```
 
 
-### Tree Diagrams
+### Collapsible Tree Diagram
 
-```{r, cache=TRUE, eval=FALSE}
+```{r tree, cache=TRUE, eval=TRUE}
 
+# https://adeelk93.github.io/collapsibleTree/
 
+org <- data.frame(
+    Manager = c(
+        NA, "Ana", "Ana", "Bill", "Bill", "Bill", "Claudette", "Claudette", "Danny",
+        "Fred", "Fred", "Grace", "Larry", "Larry", "Nicholas", "Nicholas"
+    ),
+    Employee = c(
+        "Ana", "Bill", "Larry", "Claudette", "Danny", "Erika", "Fred", "Grace",
+        "Henri", "Ida", "Joaquin", "Kate", "Mindy", "Nicholas", "Odette", "Peter"
+    ),
+    Title = c(
+        "President", "VP Operations", "VP Finance", "Director", "Director", "Scientist",
+        "Manager", "Manager", "Jr Scientist", "Operator", "Operator", "Associate",
+        "Analyst", "Director", "Accountant", "Accountant"
+    )
+)
+
+org$Color <- org$Title
+levels(org$Color) <- colorspace::rainbow_hcl(11)
+collapsibleTreeNetwork(
+  org,
+  attribute = "Title",
+  fill = "Color",
+  nodeSize = "leafCount",
+  collapsed = FALSE
+)
 
 ```
 
 
-
 ### Categorical Heatmaps
+
 ```{r, cache=TRUE, eval=FALSE}
 
 
@@ -397,47 +425,7 @@ leaflet(crimes_full) %>%
 ```
 
 
-### Custom Gun Icons
-
-```{r, cache=TRUE, eval=TRUE}
-
-# https://rstudio.github.io/leaflet/markers.html
-gunIcon <- makeIcon(
-  iconUrl = here("handgun.png"),
-  iconWidth = 35, iconHeight = 35,
-  iconAnchorX = 0, iconAnchorY = 10
-)
-
-leaflet(crimes %>% filter(grepl("GUN",Description)) %>% na.omit()) %>%
-  addTiles() %>%
-  addMarkers(~Longitude, ~Latitude, icon = gunIcon)
-
-```
-
-
-### Tile Layers
-
-```{r, cache=TRUE, eval=TRUE}
-
-leaflet(crimes) %>%
-  # Base groups
-  addTiles(group = "Default") %>%
-  addProviderTiles(providers$Stamen.Toner, group = "Toner") %>%
-  addProviderTiles(providers$NASAGIBS.ViirsEarthAtNight2012, group = "NASA") %>%
-  addProviderTiles(providers$Stamen.Watercolor, group = "Watercolor") %>% 
-  # Overlay groups
-  addCircles(~Longitude, ~Latitude, group = "Crimes") %>%
-  # Layers control
-  addLayersControl(
-    baseGroups = c("Default", "Toner", "NASA", "Watercolor"),
-    overlayGroups = c("Crimes"),
-    options = layersControlOptions(collapsed = FALSE)
-  )
-
-```
-
-
-### Circle Layers
+### Circle and Tile Layers
 
 ```{r, cache=TRUE, eval=TRUE}
 
@@ -451,6 +439,9 @@ GTA <- crimes[crimes$`Primary Type` == 'MOTOR VEHICLE THEFT',]
 leaflet(crimes) %>%
   # Base groups
   addTiles(group = "Default") %>%
+  addProviderTiles(providers$Stamen.Toner, group = "Toner") %>%
+  addProviderTiles(providers$Stamen.Watercolor, group = "Watercolor") %>% 
+  addProviderTiles(providers$NASAGIBS.ViirsEarthAtNight2012, group = "NASA") %>%
   # Overlay groups
   addCircles(~BATTERY$Longitude, ~BATTERY$Latitude, group = "BATTERY") %>%
   addCircles(~ROBBERY$Longitude, ~ROBBERY$Latitude, group = "ROBBERY") %>%
@@ -460,6 +451,7 @@ leaflet(crimes) %>%
   addCircles(~GTA$Longitude, ~GTA$Latitude, group = "GTA") %>%
   # Layers control
   addLayersControl(
+    baseGroups = c("Default", "Toner", "Watercolor", "NASA"),
     overlayGroups = c("BATTERY","ROBBERY","HOMICIDE","ASSAULT","PROSTITUTION","GTA"),
     options = layersControlOptions(collapsed = FALSE)
   )
@@ -469,138 +461,60 @@ leaflet(crimes) %>%
 
 ### Custom icon colors
 
-```{r, eval=FALSE}
+```{r, warning=FALSE, error=FALSE, eval=TRUE}
+
+#https://rstudio.github.io/leaflet/markers.html
+
+getColor <- function(df, var) {
+  quovar <- enquo(var)
+  dat <- df %>% select(!!quovar)
+  names(dat) <- 'x'
+  lapply(dat$x, function(x) {
+    if(x == 'ROBBERY') {"green"}
+    else if(x == 'ASSAULT') {"orange"}
+    else if(x == 'THEFT') {"blue"}
+    else {"red"}
+  })
+}
 
 icons <- awesomeIcons(
   icon = 'ios-close',
   iconColor = 'black',
   library = 'ion',
-  markerColor = getColor(crimes)
+  markerColor = getColor(crimes, `Primary Type`)
 )
 
 leaflet(crimes) %>%
   addTiles() %>%
   addAwesomeMarkers(~Longitude, ~Latitude, icon=icons, label=~as.character(`Primary Type`))
 
-```
 
 
-### Crime Totals By Ward, Layered By Primary Type
+# Alternative implementation:
 
-```{r, cache=TRUE, eval=FALSE}
-
-ward_totals_by_type <- crimes %>% 
-  select(Ward, `Primary Type`) %>% 
-  group_by(Ward, `Primary Type`) %>% 
-  summarise(n()) %<>% 
-  rename(count = `n()`) %>% 
-  dplyr::spread(key = `Primary Type`,value = count)
-
-ward_totals_by_type[is.na(ward_totals_by_type)] <- 0
-
-battery_totals <- setNames(ward_totals_by_type$BATTERY, as.character(ward_totals_by_type$Ward))
-robbery_totals <- setNames(ward_totals_by_type$ROBBERY, as.character(ward_totals_by_type$Ward))
-homicide_totals <- setNames(ward_totals_by_type$HOMICIDE, as.character(ward_totals_by_type$Ward))
-assault_totals <- setNames(ward_totals_by_type$ASSAULT, as.character(ward_totals_by_type$Ward))
-prostitution_totals <- setNames(ward_totals_by_type$PROSTITUTION, as.character(ward_totals_by_type$Ward))
-gta_totals <- setNames(ward_totals_by_type$`MOTOR VEHICLE THEFT`, as.character(ward_totals_by_type$Ward))
-
-ward_boundaries$battery_total <- battery_totals
-ward_boundaries$robbery_total <- robbery_totals
-ward_boundaries$homicide_total <- homicide_totals
-ward_boundaries$assault_total <- assault_totals
-ward_boundaries$prostitution_total <- prostitution_totals
-ward_boundaries$gta_total <- gta_totals
-
-get_palette <- function(category){
-  colorQuantile("Reds", ward_boundaries$category, n = 10)
-}
-
-leaflet(ward_boundaries) %>%
-  addTiles() %>%
-  addPolygons(fillColor = ~get_palette(battery_total),
-              weight = 2,
-              opacity = 1,
-              color = "white",
-              dashArray = "3",
-              fillOpacity = 0.9,
-              group = "BATTERY",
-              highlight = highlightOptions(
-                weight = 5,
-                color = "#666",
-                dashArray = "",
-                fillOpacity = 0.7,
-                bringToFront = TRUE)) %>% 
-  addPolygons(fillColor = ~get_palette(crime_total),
-              weight = 2,
-              opacity = 1,
-              color = "white",
-              dashArray = "3",
-              fillOpacity = 0.9,
-              group = "ROBBERY",
-              highlight = highlightOptions(
-                weight = 5,
-                color = "#666",
-                dashArray = "",
-                fillOpacity = 0.7,
-                bringToFront = TRUE)) %>% 
-  addPolygons(fillColor = ~get_palette(crime_total),
-              weight = 2,
-              opacity = 1,
-              color = "white",
-              dashArray = "3",
-              fillOpacity = 0.9,
-              group = "HOMICIDE",
-              highlight = highlightOptions(
-                weight = 5,
-                color = "#666",
-                dashArray = "",
-                fillOpacity = 0.7,
-                bringToFront = TRUE)) %>% 
-  addPolygons(fillColor = ~get_palette(crime_total),
-              weight = 2,
-              opacity = 1,
-              color = "white",
-              dashArray = "3",
-              fillOpacity = 0.9,
-              group = "ASSAULT",
-              highlight = highlightOptions(
-                weight = 5,
-                color = "#666",
-                dashArray = "",
-                fillOpacity = 0.7,
-                bringToFront = TRUE)) %>% 
-  addPolygons(fillColor = ~get_palette(crime_total),
-              weight = 2,
-              opacity = 1,
-              color = "white",
-              dashArray = "3",
-              fillOpacity = 0.9,
-              group = "PROSTITUTION",
-              highlight = highlightOptions(
-                weight = 5,
-                color = "#666",
-                dashArray = "",
-                fillOpacity = 0.7,
-                bringToFront = TRUE)) %>% 
-  addPolygons(fillColor = ~get_palette(crime_total),
-              weight = 2,
-              opacity = 1,
-              color = "white",
-              dashArray = "3",
-              fillOpacity = 0.9,
-              group = "GTA",
-              highlight = highlightOptions(
-                weight = 5,
-                color = "#666",
-                dashArray = "",
-                fillOpacity = 0.7,
-                bringToFront = TRUE)) %>% 
-
-  addLayersControl(
-    overlayGroups = c("BATTERY","ROBBERY","HOMICIDE","ASSAULT","PROSTITUTION","GTA"),
-    options = layersControlOptions(collapsed = FALSE)
-  )
+# getColor <- function(df) {
+#   # Need to use lapply() here instead os sapply()
+#   # like the example from leaflet for r. The reason
+#   # is that jsonlite is expecting a named list, not a
+#   # named vector
+#   lapply(df$`Primary Type`, function(`Primary Type`) {
+#     if(`Primary Type` == 'ROBBERY') {"green"}
+#     else if(`Primary Type` == 'ASSAULT') {"orange"}
+#     else if(`Primary Type` == 'THEFT') {"blue"}
+#     else {"red"}
+#   })
+# }
+# 
+# icons <- awesomeIcons(
+#   icon = 'ios-close',
+#   iconColor = 'black',
+#   library = 'ion',
+#   markerColor = getColor(crimes)
+# )
+# 
+# leaflet(crimes) %>%
+#   addTiles() %>%
+#   addAwesomeMarkers(~Longitude, ~Latitude, icon=icons, label=~as.character(`Primary Type`))
 
 ```
 
@@ -652,13 +566,13 @@ ggplot() +
   ) +
   # i just extended the scale a bit + put axis on top; choose aesthetics that work 
   # for you
-  scale_x_comma(position = "top", limits = c(0, 10)) +
-  scale_color_ipsum(name = "A real legend title") +
+  #scale_x_comma(position = "top", limits = c(0, 10)) +
+  #scale_color_ipsum(name = "A real legend title") +
   labs(
-    x = "Description of the value", y = NULL,
+    x = "Description of the value", y = NULL, 
     title = "A good plot title"
   ) +
-  theme_ipsum_rc(grid = "X") +
+  #theme_ipsum_rc(grid = "X") +
   theme(legend.position = "top")
 
 ```
@@ -708,7 +622,7 @@ ggraph(mygraph, layout = 'dendrogram', circular = TRUE) +
 
 ### HEB 2
 
-```{r, cache=TRUE, eval=FALSE, warning=FALSE}
+```{r, cache=TRUE, warning=FALSE, eval=TRUE}
 
 # https://www.r-graph-gallery.com/311-add-labels-to-hierarchical-edge-bundling/
 
@@ -771,41 +685,5 @@ ggraph(mygraph, layout = 'dendrogram', circular = TRUE) +
     plot.margin=unit(c(0,0,0,0),"cm"),
   ) +
   expand_limits(x = c(-1.3, 1.3), y = c(-1.3, 1.3))
-
-```
-
-
-
-### Collapsible Tree Diagram
-```{r tree, cache=TRUE, eval=FALSE}
-
-# https://adeelk93.github.io/collapsibleTree/
-
-org <- data.frame(
-    Manager = c(
-        NA, "Ana", "Ana", "Bill", "Bill", "Bill", "Claudette", "Claudette", "Danny",
-        "Fred", "Fred", "Grace", "Larry", "Larry", "Nicholas", "Nicholas"
-    ),
-    Employee = c(
-        "Ana", "Bill", "Larry", "Claudette", "Danny", "Erika", "Fred", "Grace",
-        "Henri", "Ida", "Joaquin", "Kate", "Mindy", "Nicholas", "Odette", "Peter"
-    ),
-    Title = c(
-        "President", "VP Operations", "VP Finance", "Director", "Director", "Scientist",
-        "Manager", "Manager", "Jr Scientist", "Operator", "Operator", "Associate",
-        "Analyst", "Director", "Accountant", "Accountant"
-    )
-)
-
-org$Color <- org$Title
-levels(org$Color) <- colorspace::rainbow_hcl(11)
-collapsibleTreeNetwork(
-  org,
-  attribute = "Title",
-  fill = "Color",
-  nodeSize = "leafCount",
-  collapsed = FALSE
-)
-
 
 ```
